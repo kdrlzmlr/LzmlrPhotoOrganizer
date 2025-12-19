@@ -67,6 +67,7 @@ namespace PhotoVideoOrganizer
             _logBuilder.Clear();
 
             StartButton.IsEnabled = false;
+            copyormove.IsEnabled = false;
             StatusText.Text = "Scanning files...";
 
             var extensions = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".heic", ".heif", ".mp4", ".avi", ".mov", ".wmv", ".mkv", ".m4v" };
@@ -78,13 +79,30 @@ namespace PhotoVideoOrganizer
             {
                 MessageBox.Show("No supported media files found.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                 StartButton.IsEnabled = true;
+                copyormove.IsEnabled = true;
                 StatusText.Text = "Ready";
                 return;
             }
 
-            StatusText.Text = $"Found {files.Count} files. Computing hashes (optimized)...";
+            // === TOTAL PROGRESS SETUP ===
+            // Total files to process: all files (each file is hashed AND moved)
+            long totalOperations = files.Count * 2L;  // 1 for hashing, 1 for moving
+            ProgressBar.Minimum = 0;
+            ProgressBar.Maximum = totalOperations;
             ProgressBar.Value = 0;
-            ProgressBar.Maximum = files.Count;
+
+            long completedOperations = 0;
+
+            // Helper to update progress
+            void UpdateProgress()
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    ProgressBar.Value = completedOperations;
+                    double percent = totalOperations > 0 ? (completedOperations * 100.0 / totalOperations) : 0;
+                    StatusText.Text = $"Overall progress: {percent:F1}% ({completedOperations}/{totalOperations} operations)";
+                });
+            }
 
             // Optimization: Use incremental hash + larger buffer + parallel processing for small files
             var fileGroups = new Dictionary<string, List<string>>();
@@ -146,17 +164,20 @@ namespace PhotoVideoOrganizer
                     }
 
                     int current = System.Threading.Interlocked.Increment(ref processed);
+                    System.Threading.Interlocked.Increment(ref completedOperations);  // +1 for hashing
+
                     Dispatcher.Invoke(() =>
                     {
-                        ProgressBar.Value = current;
-                        StatusText.Text = $"Hashed {current}/{files.Count} files... ({Path.GetFileName(filePath)})";
+                        ProgressBar.Value = completedOperations;
+                        double percent = (completedOperations * 100.0 / totalOperations);
+                        StatusText.Text = $"Hashing {current}/{files.Count} files... ({percent:F1}% overall)";
                     });
                 });
 
                 await Task.WhenAll(tasks);
             });
 
-            // Phase 2: Moving files
+            // Phase 2: Moving or copying files
             StatusText.Text = "Organizing files...";
             ProgressBar.Value = 0;
             ProgressBar.Maximum = files.Count;
@@ -164,56 +185,128 @@ namespace PhotoVideoOrganizer
             string dupeDir = Path.Combine(_target, "Duplicates");
             Directory.CreateDirectory(dupeDir);
 
-            int moved = 0;
+            int organized = 0;
             int duplicates = duplicateFiles.Count;
 
-            foreach (var group in fileGroups.Values)
+            if (copyormove.IsChecked == true)
             {
-                var toKeepPath = group.First();
-                var date = GetDateTaken(toKeepPath);
-                string year = date.ToString("yyyy");
-                string month = date.ToString("MMMM");  // Full month name: January, February, ...
-
-                // Create Year → Month structure
-                string yearDir = Path.Combine(_target, year);
-                string destDir = Path.Combine(yearDir, month);
-
-                Directory.CreateDirectory(destDir);  // Creates year and month in one go if needed
-
-                var fileName = Path.GetFileName(toKeepPath);
-                var destPath = GetUniquePath(Path.Combine(destDir, fileName));
-
-                try
+                await Task.Run(async () =>
                 {
-                    File.Move(toKeepPath, destPath);
-                    moved++;
-                }
-                catch (Exception ex)
-                {
-                    _logBuilder.AppendLine($"[ERROR] Failed to move {toKeepPath} -> {destPath}: {ex.Message}");
-                }
-
-                foreach (var dupePath in group.Skip(1))
-                {
-                    var dupeDest = GetUniquePath(Path.Combine(dupeDir, Path.GetFileName(dupePath)));
-                    try
+                    foreach (var group in fileGroups.Values)
                     {
-                        File.Move(dupePath, dupeDest);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logBuilder.AppendLine($"[ERROR] Failed to move duplicate {dupePath} -> {dupeDest}: {ex.Message}");
-                    }
-                }
+                        var toKeepPath = group.First();
+                        var date = GetDateTaken(toKeepPath);
+                        string year = date.ToString("yyyy");
+                        string month = date.ToString("MMMM");  // Full month name: January, February, ...
 
-                ProgressBar.Value += group.Count;
+                        // Create Year → Month structure
+                        string yearDir = Path.Combine(_target, year);
+                        string destDir = Path.Combine(yearDir, month);
+
+                        Directory.CreateDirectory(destDir);  // Creates year and month in one go if needed
+
+                        var fileName = Path.GetFileName(toKeepPath);
+                        var destPath = GetUniquePath(Path.Combine(destDir, fileName));
+
+                        try
+                        {
+                            File.Move(toKeepPath, destPath);
+                            organized++;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logBuilder.AppendLine($"[ERROR] Failed to move {toKeepPath} -> {destPath}: {ex.Message}");
+                        }
+
+                        foreach (var dupePath in group.Skip(1))
+                        {
+                            var dupeDest = GetUniquePath(Path.Combine(dupeDir, Path.GetFileName(dupePath)));
+                            try
+                            {
+                                File.Move(dupePath, dupeDest);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logBuilder.AppendLine($"[ERROR] Failed to move duplicate {dupePath} -> {dupeDest}: {ex.Message}");
+                            }
+                        }
+
+                        // Count each moved file (unique + duplicates)
+                        completedOperations += group.Count;
+
+                        Dispatcher.Invoke(() =>
+                        {
+                            ProgressBar.Value = Math.Min(completedOperations, totalOperations); // Clamp to max
+                            double percent = (completedOperations * 100.0 / totalOperations);
+                            StatusText.Text = $"Moving files... {organized} unique • {percent:F1}% overall";
+                        });
+
+                        await Task.Delay(1); // Essential: allows UI to update
+                    }
+                });
+            }
+            else
+            {
+                await Task.Run(async () =>
+                {
+                    foreach (var group in fileGroups.Values)
+                    {
+                        var toKeepPath = group.First();
+                        var date = GetDateTaken(toKeepPath);
+                        string year = date.ToString("yyyy");
+                        string month = date.ToString("MMMM");  // Full month name: January, February, ...
+
+                        // Create Year → Month structure
+                        string yearDir = Path.Combine(_target, year);
+                        string destDir = Path.Combine(yearDir, month);
+
+                        Directory.CreateDirectory(destDir);  // Creates year and month in one go if needed
+
+                        var fileName = Path.GetFileName(toKeepPath);
+                        var destPath = GetUniquePath(Path.Combine(destDir, fileName));
+
+                        try
+                        {
+                            File.Copy(toKeepPath, destPath);
+                            organized++;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logBuilder.AppendLine($"[ERROR] Failed to copy {toKeepPath} -> {destPath}: {ex.Message}");
+                        }
+
+                        foreach (var dupePath in group.Skip(1))
+                        {
+                            var dupeDest = GetUniquePath(Path.Combine(dupeDir, Path.GetFileName(dupePath)));
+                            try
+                            {
+                                File.Copy(dupePath, dupeDest);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logBuilder.AppendLine($"[ERROR] Failed to copy duplicate {dupePath} -> {dupeDest}: {ex.Message}");
+                            }
+                        }
+
+                        completedOperations += group.Count;
+
+                        Dispatcher.Invoke(() =>
+                        {
+                            ProgressBar.Value = Math.Min(completedOperations, totalOperations); // Clamp to max
+                            double percent = (completedOperations * 100.0 / totalOperations);
+                            StatusText.Text = $"Copying files... {organized} unique • {percent:F1}% overall";
+                        });
+
+                        await Task.Delay(1); // Essential: allows UI to update
+                    }
+                });
             }
 
-            double duplicateGB = duplicateSizeBytes / (1024.0 * 1024.0 * 1024.0);
+                double duplicateGB = duplicateSizeBytes / (1024.0 * 1024.0 * 1024.0);
 
             // Final report
             string summary = $"Organization Complete!\n\n" +
-                            $"Unique files moved: {moved}\n" +
+                            $"Unique files moved: {organized}\n" +
                             $"Duplicates found: {duplicates}\n" +
                             $"Space saved: {duplicateGB:F2} GB\n\n" +
                             $"Duplicates are in: {_target}\\Duplicates\n";
@@ -225,6 +318,7 @@ namespace PhotoVideoOrganizer
 
             StatusText.Text = "Done!";
             StartButton.IsEnabled = true;
+            copyormove.IsEnabled = true;
 
             MessageBox.Show(summary, "Success", MessageBoxButton.OK, MessageBoxImage.Information);
 
@@ -336,185 +430,3 @@ namespace PhotoVideoOrganizer
         }
     }
 }
-//// MainWindow.xaml.cs
-//using MetadataExtractor;
-//using MetadataExtractor.Formats.Exif;
-//using MetadataExtractor.Formats.QuickTime;
-//using Microsoft.Win32;
-//using System.IO;
-//using System.Windows;
-//using Directory = System.IO.Directory;
-
-//namespace PhotoVideoOrganizer
-//{
-//    public partial class MainWindow : Window
-//    {
-//        private string _source = "";
-//        private string _target = "";
-
-//        public MainWindow()
-//        {
-//            InitializeComponent();
-//        }
-
-//        private void BrowseSource_Click(object sender, RoutedEventArgs e)
-//        {
-//            _source = BrowseFolder();
-//            SourceTextBox.Text = _source;
-//        }
-
-//        private void BrowseTarget_Click(object sender, RoutedEventArgs e)
-//        {
-//            _target = BrowseFolder();
-//            TargetTextBox.Text = _target;
-//        }
-
-//        private string BrowseFolder()
-//        {
-//            var folderDialog = new OpenFolderDialog
-//            {
-//                Title = "Select Folder",
-//                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
-//            };
-
-//            if (folderDialog.ShowDialog() == true)
-//            {
-//                var folderName = folderDialog.FolderName;
-//            }
-//            return folderDialog.FolderName;
-//        }
-
-//        private async void Start_Click(object sender, RoutedEventArgs e)
-//        {
-//            if (string.IsNullOrEmpty(_source) || !Directory.Exists(_source))
-//            {
-//                MessageBox.Show("Invalid source folder.");
-//                return;
-//            }
-//            if (string.IsNullOrEmpty(_target))
-//            {
-//                MessageBox.Show("Invalid target folder.");
-//                return;
-//            }
-
-//            Directory.CreateDirectory(_target);
-
-//            StartButton.IsEnabled = false;
-//            StatusText.Text = "Scanning files...";
-
-//            var extensions = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".heic", ".mp4", ".avi", ".mov", ".wmv", ".mkv" };
-//            var files = Directory.EnumerateFiles(_source, "*.*", SearchOption.AllDirectories)
-//                                 .Where(f => extensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-//                                 .ToList();
-
-//            ProgressBar.Maximum = files.Count;
-//            ProgressBar.Value = 0;
-
-//            var fileGroups = new Dictionary<string, List<string>>();
-
-//            int processed = 0;
-
-//            foreach (var filePath in files)
-//            {
-//                var dateTaken = GetDateTaken(filePath);
-//                var fi = new FileInfo(filePath);
-//                var key = $"{fi.Name}|{dateTaken:yyyy-MM-dd HH:mm:ss}|{fi.Length}";
-
-//                if (!fileGroups.ContainsKey(key))
-//                    fileGroups[key] = new List<string>();
-
-//                fileGroups[key].Add(filePath);
-
-//                processed++;
-//                ProgressBar.Value = processed;
-//                StatusText.Text = $"Scanned {processed}/{files.Count} files...";
-//                await Task.Yield(); // Allow UI update
-//            }
-
-//            int moved = 0;
-//            int duplicates = 0;
-
-//            string dupeDir = Path.Combine(_target, "Duplicates");
-//            Directory.CreateDirectory(dupeDir);
-
-//            foreach (var group in fileGroups.Values)
-//            {
-//                var toKeepPath = group.First();
-//                var date = GetDateTaken(toKeepPath);
-//                var ym = date.ToString("yyyy-MM");
-//                var destDir = Path.Combine(_target, ym);
-//                Directory.CreateDirectory(destDir);
-
-//                var fileName = Path.GetFileName(toKeepPath);
-//                var destPath = GetUniquePath(Path.Combine(destDir, fileName));
-
-//                File.Move(toKeepPath, destPath);
-//                moved++;
-
-//                foreach (var dupePath in group.Skip(1))
-//                {
-//                    var dupeDest = GetUniquePath(Path.Combine(dupeDir, Path.GetFileName(dupePath)));
-//                    File.Move(dupePath, dupeDest);
-//                    duplicates++;
-//                }
-//            }
-
-//            StatusText.Text = $"Done! Moved {moved} files, {duplicates} duplicates to 'Duplicates' folder.";
-//            StartButton.IsEnabled = true;
-//        }
-
-//        private DateTime GetDateTaken(string filePath)
-//        {
-//            try
-//            {
-//                var directories = ImageMetadataReader.ReadMetadata(filePath);
-
-//                // 1. Try EXIF DateTimeOriginal (for photos, including HEIC)
-//                var subIfd = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
-//                if (subIfd?.TryGetDateTime(ExifSubIfdDirectory.TagDateTimeOriginal, out var exifDt) == true)
-//                {
-//                    return exifDt;
-//                }
-
-//                // 2. For QuickTime-based videos (MP4, MOV, etc.), try Creation Date from MovieHeader or TrackHeader
-//                var movieHeader = directories.OfType<QuickTimeMovieHeaderDirectory>().FirstOrDefault();
-//                if (movieHeader?.TryGetDateTime(QuickTimeMovieHeaderDirectory.TagCreated, out var movieDt) == true)
-//                {
-//                    return movieDt;
-//                }
-
-//                var trackHeader = directories.OfType<QuickTimeTrackHeaderDirectory>().FirstOrDefault();
-//                if (trackHeader?.TryGetDateTime(QuickTimeTrackHeaderDirectory.TagCreated, out var trackDt) == true)
-//                {
-//                    return trackDt;
-//                }
-
-//                // Optional: Some videos may have it in other QuickTime directories, but above covers most cases
-//            }
-//            catch
-//            {
-//                // Ignore any metadata reading errors (corrupted files, unsupported, etc.)
-//            }
-
-//            // Fallback to file CreationTime
-//            return new FileInfo(filePath).CreationTime;
-//        }
-
-//        private string GetUniquePath(string path)
-//        {
-//            if (!File.Exists(path)) return path;
-
-//            var dir = Path.GetDirectoryName(path);
-//            var name = Path.GetFileNameWithoutExtension(path);
-//            var ext = Path.GetExtension(path);
-//            int i = 1;
-
-//            while (true)
-//            {
-//                var newPath = Path.Combine(dir, $"{name} ({i}){ext}");
-//                if (!File.Exists(newPath)) return newPath;
-//                i++;
-//            }
-//        }
-//    }
-//}
