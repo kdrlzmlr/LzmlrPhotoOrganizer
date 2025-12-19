@@ -259,6 +259,8 @@ namespace PhotoVideoOrganizer
                     Text = report.ToString(),
                     FontFamily = new System.Windows.Media.FontFamily("Consolas"),
                     FontSize = 12,
+                    Background = System.Windows.Media.Brushes.Black,
+                    Foreground = System.Windows.Media.Brushes.White,
                     IsReadOnly = true,
                     VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
                     HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,

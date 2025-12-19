@@ -2,7 +2,7 @@
 <Window x:Class="PhotoVideoOrganizer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Photo &amp; Video Organizer" Height="400" Width="600" Background="Black" Foreground="White">
+        Title="Photo &amp; Video Organizer" Height="424" Width="600" Background="Black" Foreground="White">
     <Window.Effect>
         <DropShadowEffect/>
     </Window.Effect>
@@ -34,6 +34,6 @@
 
         <ProgressBar x:Name="ProgressBar" Grid.Row="5" Height="20" Margin="0,20,0,10" Minimum="0" Maximum="100" Value="0" Background="Black" BorderBrush="#FF0004FF" Foreground="#FFF6FFF8"/>
 
-        <TextBlock x:Name="StatusText" Grid.Row="7" Text="Ready" VerticalAlignment="Top" Margin="0,20,0,0"/>
+        <TextBlock x:Name="StatusText" Grid.Row="7" Text="Ready" VerticalAlignment="Top" Margin="0,18,0,0"/>
     </Grid>
 </Window>
