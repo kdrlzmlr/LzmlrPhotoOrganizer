@@ -8,7 +8,7 @@ It intelligently detects and removes **true duplicates** using SHA256 hashing (n
 
 Built with .NET 8, published as a **single executable** — no installation required!
 
-![App Screenshot](https://ibb.co/bRJhCDFc)  
+![alt text](https://i.ibb.co/YTZ91wXH/Screenshot-2025-12-19-233308.png)
 
 
 ## Features
