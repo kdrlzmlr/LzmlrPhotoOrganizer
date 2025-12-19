@@ -6,7 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>storage_block_volume_icon_217060.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="storage_block_volume_icon_217060.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MetadataExtractor" Version="2.9.0" />

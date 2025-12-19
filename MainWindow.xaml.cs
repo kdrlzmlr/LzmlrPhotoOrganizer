@@ -249,6 +249,8 @@ namespace PhotoVideoOrganizer
                     Title = "Duplicates & Log Report",
                     Width = 800,
                     Height = 600,
+                    Background = System.Windows.Media.Brushes.Black,
+                    Foreground = System.Windows.Media.Brushes.White,
                     WindowStartupLocation = WindowStartupLocation.CenterOwner,
                     Owner = this
                 };
