@@ -8,8 +8,8 @@ It intelligently detects and removes **true duplicates** using SHA256 hashing (n
 
 Built with .NET 8, published as a **single executable** — no installation required!
 
-![App Screenshot](https://via.placeholder.com/800x500.png?text=Photo+Video+Organizer+Screenshot)  
-*(Screenshot placeholder — replace with actual app screenshot)*
+![App Screenshot](https://ibb.co/bRJhCDFc)  
+
 
 ## Features
 
