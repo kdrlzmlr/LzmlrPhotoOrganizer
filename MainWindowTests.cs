@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using NUnit.Framework.Legacy;
 
 namespace PhotoVideoOrganizer.Tests
 {
@@ -41,7 +42,8 @@ namespace PhotoVideoOrganizer.Tests
 
             // Act
             var method = _mainWindowType.GetMethod("ComputeFileHashFastAsync", BindingFlags.NonPublic | BindingFlags.Static);
-            Assert.IsNotNull(method, "Could not find ComputeFileHashFastAsync via reflection.");
+
+            ClassicAssert.IsNotNull(method, "Could not find ComputeFileHashFastAsync via reflection.");
 
             // Invoke static async method and await result
             var taskObj = (Task)method.Invoke(null, new object[] { file })!;
@@ -49,7 +51,7 @@ namespace PhotoVideoOrganizer.Tests
 
             // The Task returns Task<(string hash, long size)>; need to extract Result property via reflection
             var resultProperty = taskObj.GetType().GetProperty("Result");
-            Assert.IsNotNull(resultProperty, "Task did not expose Result property.");
+            ClassicAssert.IsNotNull(resultProperty, "Task did not expose Result property.");
 
             var tuple = resultProperty!.GetValue(taskObj);
             // tuple is a ValueTuple<string,long>
@@ -59,8 +61,8 @@ namespace PhotoVideoOrganizer.Tests
             long actualSize = (long)sizeProp!.GetValue(tuple)!;
 
             // Assert
-            Assert.AreEqual(expectedHash, actualHash, "Hash mismatch");
-            Assert.AreEqual(expectedSize, actualSize, "Size mismatch");
+            ClassicAssert.AreEqual(expectedHash, actualHash, "Hash mismatch");
+            ClassicAssert.AreEqual(expectedSize, actualSize, "Size mismatch");
 
             // Cleanup
             Directory.Delete(tmp, recursive: true);
@@ -85,12 +87,12 @@ namespace PhotoVideoOrganizer.Tests
 
             // Act
             var method = _mainWindowType.GetMethod("GetUniquePath", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.IsNotNull(method, "Could not find GetUniquePath via reflection.");
+            ClassicAssert.IsNotNull(method, "Could not find GetUniquePath via reflection.");
 
             var result = (string)method.Invoke(mainWindow, new object[] { basePath })!;
 
             // Assert: expected "file (2).txt"
-            Assert.AreEqual(Path.Combine(tmpDir, "file (2).txt"), result);
+            ClassicAssert.AreEqual(Path.Combine(tmpDir, "file (2).txt"), result);
 
             // Cleanup
             Directory.Delete(tmpDir, recursive: true);
@@ -112,13 +114,13 @@ namespace PhotoVideoOrganizer.Tests
             var mainWindow = (object)FormatterServices.GetUninitializedObject(_mainWindowType);
 
             var method = _mainWindowType.GetMethod("GetDateTaken", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.IsNotNull(method, "Could not find GetDateTaken via reflection.");
+            ClassicAssert.IsNotNull(method, "Could not find GetDateTaken via reflection.");
 
             // Act
             var result = (DateTime)method.Invoke(mainWindow, new object[] { file })!;
 
             // Assert (allow small difference due to filesystem rounding, but should be equal here)
-            Assert.AreEqual(expected, result);
+            ClassicAssert.AreEqual(expected, result);
 
             // Cleanup
             Directory.Delete(tmpDir, recursive: true);
