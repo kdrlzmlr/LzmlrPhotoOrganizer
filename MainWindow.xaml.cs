@@ -86,7 +86,7 @@ namespace PhotoVideoOrganizer
 
             // === TOTAL PROGRESS SETUP ===
             // Total files to process: all files (each file is hashed AND moved)
-            long totalOperations = files.Count * 2L;  // 1 for hashing, 1 for moving
+            long totalOperations = files.Count * 2L;
             ProgressBar.Minimum = 0;
             ProgressBar.Maximum = totalOperations;
             ProgressBar.Value = 0;
@@ -94,13 +94,13 @@ namespace PhotoVideoOrganizer
             long completedOperations = 0;
 
             // Helper to update progress
-            void UpdateProgress()
+            void UpdateProgress(string operation)
             {
                 Dispatcher.Invoke(() =>
                 {
                     ProgressBar.Value = completedOperations;
                     double percent = totalOperations > 0 ? (completedOperations * 100.0 / totalOperations) : 0;
-                    StatusText.Text = $"Overall progress: {percent:F1}% ({completedOperations}/{totalOperations} operations)";
+                    StatusText.Text = $"{operation} progress: {percent:F1}% ({completedOperations}/{totalOperations} operations)";
                 });
             }
 
@@ -166,12 +166,7 @@ namespace PhotoVideoOrganizer
                     int current = System.Threading.Interlocked.Increment(ref processed);
                     System.Threading.Interlocked.Increment(ref completedOperations);  // +1 for hashing
 
-                    Dispatcher.Invoke(() =>
-                    {
-                        ProgressBar.Value = completedOperations;
-                        double percent = (completedOperations * 100.0 / totalOperations);
-                        StatusText.Text = $"Hashing {current}/{files.Count} files... ({percent:F1}% overall)";
-                    });
+                    UpdateProgress("Hashing");
                 });
 
                 await Task.WhenAll(tasks);
@@ -234,12 +229,10 @@ namespace PhotoVideoOrganizer
                         // Count each moved file (unique + duplicates)
                         completedOperations += group.Count;
 
-                        Dispatcher.Invoke(() =>
-                        {
-                            ProgressBar.Value = Math.Min(completedOperations, totalOperations); // Clamp to max
-                            double percent = (completedOperations * 100.0 / totalOperations);
-                            StatusText.Text = $"Moving files... {organized} unique • {percent:F1}% overall";
-                        });
+                        // === Progress: add exactly the number of files moved in this group ===
+                        Interlocked.Add(ref completedOperations, group.Count);
+
+                        UpdateProgress("Moving");
 
                         await Task.Delay(1); // Essential: allows UI to update
                     }
@@ -288,14 +281,10 @@ namespace PhotoVideoOrganizer
                             }
                         }
 
-                        completedOperations += group.Count;
+                        // === Progress: add exactly the number of files moved in this group ===
+                        Interlocked.Add(ref completedOperations, group.Count);
 
-                        Dispatcher.Invoke(() =>
-                        {
-                            ProgressBar.Value = Math.Min(completedOperations, totalOperations); // Clamp to max
-                            double percent = (completedOperations * 100.0 / totalOperations);
-                            StatusText.Text = $"Copying files... {organized} unique • {percent:F1}% overall";
-                        });
+                        UpdateProgress("Copying");
 
                         await Task.Delay(1); // Essential: allows UI to update
                     }
