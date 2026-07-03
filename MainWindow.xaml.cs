@@ -9,6 +9,7 @@ using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.QuickTime;
 using Directory = System.IO.Directory;
+using System.Windows.Media;
 
 namespace PhotoVideoOrganizer
 {
@@ -115,6 +116,8 @@ namespace PhotoVideoOrganizer
             int maxDegree = Environment.ProcessorCount / 2;
             if (maxDegree < 1) maxDegree = 1;
 
+            ProgressBar.Foreground = Brushes.Orange;
+
             await Task.Run(async () =>
             {
                 var tasks = files.Select(async filePath =>
@@ -174,8 +177,7 @@ namespace PhotoVideoOrganizer
 
             // Phase 2: Moving or copying files
             StatusText.Text = "Organizing files...";
-            ProgressBar.Value = 0;
-            ProgressBar.Maximum = files.Count;
+            ProgressBar.Foreground = Brushes.LimeGreen;
 
             string dupeDir = Path.Combine(_target, "Duplicates");
             Directory.CreateDirectory(dupeDir);
